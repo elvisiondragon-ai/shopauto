@@ -76,6 +76,8 @@ export default function ShopAuto() {
   
   // Real WhatsApp Connection State
   const [waQrCode, setWaQrCode] = useState<string | null>(null);
+  const [qrTimestamp, setQrTimestamp] = useState<number | null>(null);
+  const [qrRemaining, setQrRemaining] = useState<number>(40);
   const [, setWaStatus] = useState<"disconnected" | "connecting" | "connected">("disconnected");
   const [waBackendUrl, setWaBackendUrl] = useState("https://endpoint.elvisiongroup.com:3000");
   const [isSendingWaTest, setIsSendingWaTest] = useState(false);
@@ -200,37 +202,104 @@ export default function ShopAuto() {
     return () => clearTimeout(timer);
   }, [whatsappDestination, aiKnowledgeEssay, apiKey, waBackendUrl]);
 
+  // QR Timer Logic
+  useEffect(() => {
+    if (!qrTimestamp) return;
+    const duration = 40;
+
+    const updateTimer = () => {
+      const elapsed = Math.floor((Date.now() - qrTimestamp) / 1000);
+      const remaining = Math.max(0, duration - (elapsed % duration));
+      setQrRemaining(remaining);
+    };
+
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
+    return () => clearInterval(interval);
+  }, [qrTimestamp]);
+
   // --- WA LOGIC ---
   useEffect(() => {
-    if (waAdminType !== "custom") return;
+    if (waAdminType !== "custom" || !user) return;
 
     const normalizedUrl = waBackendUrl.replace(/\/$/, '');
-    const socket = io(normalizedUrl);
+    
+    // FIX: Pass the user ID as a query param in the handshake if the server supports it, 
+    // but primarily we just need to listen to the right events.
+    const socket = io(normalizedUrl, {
+      transports: ["websocket"],
+      upgrade: false,
+      query: {
+        userId: user.id
+      }
+    });
 
-    socket.on("qr-user", (url) => {
-      console.log("[WA-SOCKET] User QR Received (Length:", url?.length, ")");
-      setWaQrCode(url);
+    socket.on("connect_error", (err) => {
+      console.error("[WA-SOCKET] Connection Error:", err.message);
+    });
+
+    // Listen to user-specific QR event
+    socket.on(`qr-${user.id}`, (data) => {
+      // 1. If data is null (Reset triggered), clear the UI
+      if (!data || !data.qr) {
+        console.log("[WA-SOCKET] QR Cleared / Resetting...");
+        setWaQrCode(null);
+        setQrTimestamp(null);
+        return;
+      }
+
+      // 2. Otherwise, update the QR image and start the timer
+      console.log("[WA-SOCKET] Fresh QR Received from VPS:", data.timestamp);
+      setWaQrCode(data.qr);
+      setQrTimestamp(data.timestamp); // Server-side timestamp
       setWaStatus("connecting");
     });
 
-    socket.on("status-user", (status) => {
+    socket.on(`ready-${user?.id}`, (data) => {
+      alert("WhatsApp is connected as: " + data.number);
+      setIsWaConnected(true);
+      setWaStatus("connected");
+      setWaQrCode(null);
+      setQrTimestamp(null);
+      setWaAccount(data.number);
+      handleToggle("isWaConnected", true);
+    });
+
+    socket.on(`status-${user?.id}`, async (status) => {
       console.log("[WA-SOCKET] User Status Received:", status);
       if (status === "READY" || status === "AUTHENTICATED") {
-        setIsWaConnected(true);
         setWaStatus("connected");
         setWaQrCode(null);
+        setQrTimestamp(null);
+        
+        // If we don't have the number yet, fetch it immediately
+        if (!waAccount) {
+          try {
+            const resp = await fetch(`${normalizedUrl}/status?sender=${user?.id}`);
+            const data = await resp.json();
+            const num = data.status?.number || data.number;
+            if (num) {
+              setWaAccount(num);
+              setIsWaConnected(true);
+            }
+          } catch (e) {
+            console.error("Failed to fetch number on status change", e);
+          }
+        } else {
+          setIsWaConnected(true);
+        }
+        
         if (status === "READY") handleToggle("isWaConnected", true);
       } else if (status === "QR_READY") {
         setWaStatus("connecting");
-      } else if (status === "INITIALIZING") {
+      } else if (status === "INITIALIZING" || status === "RESETTING") {
+        console.log("[WA-SOCKET] VPS State:", status);
         setIsWaConnected(false);
-        setWaQrCode(prev => {
-          if (!prev) {
-            setWaStatus("disconnected");
-            return null;
-          }
-          return prev;
-        });
+        if (status === "RESETTING") {
+          setWaQrCode(null);
+          setQrTimestamp(null);
+        }
+        setWaStatus("connecting");
       }
     });
 
@@ -238,24 +307,31 @@ export default function ShopAuto() {
     const pollInterval = setInterval(async () => {
       if (!isWaConnected) {
         try {
-          const response = await fetch(`${normalizedUrl}/status`);
+          const response = await fetch(`${normalizedUrl}/status?sender=${user?.id}`);
           const data = await response.json();
-          const userStatus = data.user || { status: "INITIALIZING", qr: null };
+          const userStatus = data.status || { status: "INITIALIZING", qr: null };
           
           console.log(`[WA-POLL] Status: ${userStatus.status} | QR Present: ${!!userStatus.qr}`);
 
-          if (userStatus.status === "READY" || userStatus.status === "AUTHENTICATED") {
+          if (userStatus?.status === "READY" || userStatus?.status === "AUTHENTICATED") {
             console.log("[WA-POLL] Account Connected:", data.number);
             setIsWaConnected(true);
             setWaStatus("connected");
             setWaQrCode(null);
-            setWaAccount(data.number || "Connected WA");
-          } else if (userStatus.qr) {
+            setQrTimestamp(null);
+            setWaAccount(userStatus.number || data.number || "Connected WA");
+          } else if (userStatus?.qr) {
             if (waQrCode !== userStatus.qr) {
               console.log("[WA-POLL] New QR code found in polling");
               setWaQrCode(userStatus.qr);
+              setQrTimestamp(userStatus.lastQrTimestamp || Date.now());
             }
             setWaStatus("connecting");
+          } else if (userStatus?.status === "RESETTING") {
+            // ONLY clear QR if explicitly resetting
+            setWaQrCode(null);
+            setQrTimestamp(null);
+            setIsWaConnected(false);
           }
         } catch (err: any) {
           console.error("[WA-POLL] Error fetching status:", err.message);
@@ -267,7 +343,7 @@ export default function ShopAuto() {
       socket.disconnect();
       clearInterval(pollInterval);
     };
-  }, [waBackendUrl, waAdminType, isWaConnected]);
+  }, [waBackendUrl, waAdminType, waQrCode, isWaConnected, user?.id]); // Updated dependencies for user-specific events
 
   // Initial Status Check
   useEffect(() => {
@@ -276,17 +352,26 @@ export default function ShopAuto() {
     const checkInitialStatus = async () => {
       try {
         const normalizedUrl = waBackendUrl.replace(/\/$/, '');
-        const response = await fetch(`${normalizedUrl}/status`);
+        // Pass the user ID to get status for THIS specific user
+        const response = await fetch(`${normalizedUrl}/status?sender=${user?.id}`);
         const data = await response.json();
-        const userStatus = data.user || { status: "INITIALIZING", qr: null };
+        const userStatus = data.status || { status: "INITIALIZING", qr: null };
         
         if (userStatus.status === "READY" || userStatus.status === "AUTHENTICATED") {
           setIsWaConnected(true);
           setWaStatus("connected");
+          setWaQrCode(null);
+          setQrTimestamp(null);
           setWaAccount(data.number || "Connected WA");
         } else if (userStatus.qr) {
           setWaQrCode(userStatus.qr);
           setWaStatus("connecting");
+          setQrTimestamp(userStatus.timestamp || Date.now());
+        } else if (userStatus.status === "RESETTING") {
+          // Force reset state on login ONLY if explicitly resetting
+          setWaQrCode(null);
+          setQrTimestamp(null);
+          setIsWaConnected(false);
         }
       } catch (err) {
         console.error("Initial WA Status Error", err);
@@ -440,13 +525,15 @@ export default function ShopAuto() {
       
       if (waAdminType === "system") {
         payload.sender = "admin";
+      } else {
+        // For custom user sender, pass their unique ID
+        payload.sender = user?.id;
       }
 
       const resp = await fetch(targetUrl, {
         method: 'POST',
         headers: { 
-          'Content-Type': 'application/json',
-          'x-api-key': import.meta.env.VITE_WA_API_KEY
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify(payload)
       });
@@ -529,34 +616,31 @@ export default function ShopAuto() {
     saveSettings({ isShopeeConnected: true, shopeStoreName: "My Store", shopeShopId: "12345678" });
   };
 
-  const resetWaSession = async () => {
-    try {
-      const { data: _data, error } = await supabase.functions.invoke('shopauto-handler', {
-        body: { 
-          action: "reset_client",
-          sender: "user",
-          waBackendUrl: waBackendUrl
-        }
-      });
-      if (error) throw error;
-      toast({ title: "Sesi Direset", description: "Silakan tunggu QR baru muncul." });
-      setWaQrCode(null);
-      setIsWaConnected(false);
-      setWaStatus("connecting");
-    } catch (err: any) {
-      toast({ title: "Gagal Reset", description: err.message, variant: "destructive" });
-    }
-  };
-
   const disconnectWa = async () => {
+    if (!confirm("Are you sure you want to logout?")) return;
+
     try {
-      await fetch(waBackendUrl + "/disconnect", { 
+      // 1. Tell the VPS to destroy the current session and files
+      const res = await fetch(`${waBackendUrl}/reset-client`, { 
         method: 'POST',
-        headers: { 'x-api-key': import.meta.env.VITE_WA_API_KEY }
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sender: user?.id })
       });
-      setIsWaConnected(false); setWaStatus("disconnected"); setWaAccount(""); setWaQrCode(null);
-      handleToggle("isWaConnected", false);
-    } catch (err) { console.error(err); }
+
+      if (res.ok) {
+        // 2. Clear your local state immediately
+        setIsWaConnected(false); 
+        setWaStatus("disconnected"); 
+        setWaAccount(""); 
+        setWaQrCode(null);
+        handleToggle("isWaConnected", false);
+
+        // 3. TRIGGER RE-INITIALIZATION IMMEDIATELY
+        // This "ping" tells the VPS: "Hey, someone is looking at this user, start a new session!"
+        await fetch(`${waBackendUrl}/status?sender=${user?.id}`);
+        console.log("Reset triggered and re-init requested.");
+      }
+    } catch (err) { console.error("Logout failed", err); }
   };
 
   const onLogout = async () => { 
@@ -778,27 +862,41 @@ export default function ShopAuto() {
                         <div><p className="text-xs text-orange-900 font-bold">Premium Branding</p><p className="text-[10px] text-orange-800/70">Hubungkan nomor pribadi anda agar nama toko anda muncul di WhatsApp Gudang.</p></div>
                       </div>
                       
-                      {isWaConnected ? (
-                        <div className="p-4 bg-green-50 border border-green-100 rounded-2xl flex items-center justify-between">
-                          <div className="flex items-center gap-3"><div className="p-2 bg-green-600 rounded-full"><Smartphone className="text-white" size={18} /></div><div><p className="font-bold text-sm text-slate-900">{waAccount}</p><p className="text-[10px] text-green-600 font-bold uppercase">Ready</p></div></div>
-                          <Button variant="ghost" size="sm" className="text-red-600 text-xs" onClick={disconnectWa}>Putuskan</Button>
-                        </div>
-                      ) : waQrCode ? (
-                        <div className="flex flex-col items-center py-6 border-2 border-dashed border-orange-200 rounded-2xl bg-slate-50 space-y-4">
-                          <div className="bg-white p-2 rounded-xl shadow-md"><img src={waQrCode} alt="QR" className="w-40 h-40" /></div>
-                          <p className="text-sm text-slate-600 font-medium">Scan with WhatsApp</p>
-                          <div className="flex gap-2">
-                            <Button variant="outline" size="xs" className="text-slate-400 text-[10px]" onClick={() => { setWaQrCode(null); setWaStatus("disconnected"); }}>Reset View</Button>
-                            <Button variant="destructive" size="xs" className="text-white text-[10px]" onClick={resetWaSession}>Reset Sesi (Logout)</Button>
+                      {isWaConnected && waAccount ? (
+                        <div className="p-5 bg-green-50 border border-green-200 rounded-2xl flex items-center justify-between shadow-sm">
+                          <div className="flex items-center gap-4">
+                            <div className="p-2 bg-green-600 rounded-xl shadow-md"><Smartphone className="text-white" size={20} /></div>
+                            <div>
+                              <p className="text-xl font-bold text-slate-900 tracking-tight">
+                                {waAccount.startsWith('+') ? waAccount : `+${waAccount.replace('@s.whatsapp.net', '').replace(/\D/g, '')}`}
+                              </p>
+                              <p className="text-xs text-green-600 font-semibold flex items-center gap-1">
+                                <CheckCircle2 size={12} /> Authenticated & Ready to send
+                              </p>
+                            </div>
                           </div>
+                          <Button variant="ghost" size="sm" className="text-red-600 hover:bg-red-50 font-bold px-3 h-8" onClick={disconnectWa}>Logout</Button>
                         </div>
                       ) : (
                         <div className="flex flex-col items-center py-6 border-2 border-dashed border-orange-200 rounded-2xl bg-slate-50 space-y-4">
-                          <div className="flex flex-col items-center gap-2"><RefreshCw className="text-orange-500 animate-spin" size={24} /><p className="text-xs text-slate-400">Menghubungkan ke WhatsApp VPS...</p></div>
-                          <div className="flex gap-2">
-                            <Button variant="outline" size="xs" className="text-slate-400 text-[10px]" onClick={() => setWaStatus("connecting")}>Retry</Button>
-                            <Button variant="ghost" size="xs" className="text-red-500 text-[10px]" onClick={resetWaSession}>Reset Sesi</Button>
+                          <div className="relative bg-white p-6 rounded-3xl shadow-2xl border-4 border-slate-100 min-h-[360px] min-w-[360px] flex items-center justify-center">
+                            {waQrCode ? (
+                              <>
+                                <img src={waQrCode} alt="QR" className="w-80 h-80 object-contain" />
+                                <div className="absolute top-8 right-8 bg-orange-600 text-white px-4 py-1.5 rounded-full text-sm font-black shadow-xl animate-pulse ring-4 ring-white">
+                                  {qrRemaining === 0 ? "..." : `${qrRemaining}s`}
+                                </div>
+                              </>
+                            ) : (
+                              <div className="flex flex-col items-center text-slate-400">
+                                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500 mb-4"></div>
+                                <p className="text-sm font-medium">Waiting for session...</p>
+                              </div>
+                            )}
                           </div>
+                          <p className="text-sm text-slate-600 font-medium font-mono">
+                            {waQrCode ? "SCAN WITH WHATSAPP" : "INITIALIZING VPS..."}
+                          </p>
                         </div>
                       )}
                     </div>
