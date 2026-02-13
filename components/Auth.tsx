@@ -105,8 +105,9 @@ export function Auth() {
     e.preventDefault();
     setIsLoading(true);
     try {
+      const trimmedEmail = forgotPasswordData.email.trim().toLowerCase();
       const { error } = await supabase.auth.resetPasswordForEmail(
-        forgotPasswordData.email,
+        trimmedEmail,
         {
           redirectTo: `${window.location.origin}/reset-password`
         }
@@ -133,9 +134,9 @@ export function Auth() {
     setIsLoading(true);
     try {
       await iOSCacheCleaner.quickLoginCacheClear();
-      const trimmedEmail = loginData.email.trim();
+      const processedEmail = loginData.email.trim().toLowerCase();
       const { data, error } = await supabase.auth.signInWithPassword({
-        email: trimmedEmail,
+        email: processedEmail,
         password: loginData.password,
       });
 
@@ -146,7 +147,7 @@ export function Auth() {
             toast({ title: "Clearing Cache", description: "Retrying login...", duration: 2000 });
             await new Promise(resolve => setTimeout(resolve, 1000));
             const { data: retryData, error: retryError } = await supabase.auth.signInWithPassword({
-              email: loginData.email,
+              email: processedEmail,
               password: loginData.password,
             });
             if (retryError) throw retryError;
@@ -179,9 +180,9 @@ export function Auth() {
     setIsLoading(true);
     try {
       cleanupAuthState();
-      const trimmedEmail = signupData.email.trim();
+      const processedEmail = signupData.email.trim().toLowerCase();
       const { data, error } = await supabase.auth.signUp({
-        email: trimmedEmail,
+        email: processedEmail,
         password: signupData.password,
         options: {
           data: { display_name: signupData.displayName }
@@ -191,7 +192,7 @@ export function Auth() {
       if (error) {
         if (error.message.includes('already registered')) {
           const { data: loginData, error: loginError } = await supabase.auth.signInWithPassword({
-            email: signupData.email,
+            email: processedEmail,
             password: signupData.password,
           });
           if (loginError) throw loginError;

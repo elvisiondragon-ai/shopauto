@@ -77,7 +77,7 @@ export default function ShopAuto() {
   // Real WhatsApp Connection State
   const [waQrCode, setWaQrCode] = useState<string | null>(null);
   const [, setWaStatus] = useState<"disconnected" | "connecting" | "connected">("disconnected");
-  const [waBackendUrl, setWaBackendUrl] = useState("http://148.230.101.96:3000");
+  const [waBackendUrl, setWaBackendUrl] = useState("https://endpoint.elvisiongroup.com:3000");
   const [isSendingWaTest, setIsSendingWaTest] = useState(false);
   const [testWaMessage, setTestWaMessage] = useState("");
   const [availableGroups, setAvailableGroups] = useState<{id: string, name: string}[]>([]);
