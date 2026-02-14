@@ -79,7 +79,7 @@ export default function ShopAuto() {
   const [qrTimestamp, setQrTimestamp] = useState<number | null>(null);
   const [qrRemaining, setQrRemaining] = useState<number>(40);
   const [, setWaStatus] = useState<"disconnected" | "connecting" | "connected">("disconnected");
-  const [waBackendUrl, setWaBackendUrl] = useState("https://endpoint.elvisiongroup.com:3000");
+  const [waBackendUrl, setWaBackendUrl] = useState("https://api.elvisiongroup.com");
   const [isSendingWaTest, setIsSendingWaTest] = useState(false);
   const [testWaMessage, setTestWaMessage] = useState("");
   const [availableGroups, setAvailableGroups] = useState<{id: string, name: string}[]>([]);
@@ -413,7 +413,7 @@ export default function ShopAuto() {
       // Auto-migrate localhost to VPS IP
       const savedUrl = settings.waBackendUrl;
       const finalUrl = (savedUrl === "http://localhost:3000" || savedUrl === "http://localhost:8080" || !savedUrl) 
-        ? "http://148.230.101.96:3000" 
+        ? "https://api.elvisiongroup.com" 
         : savedUrl;
       
       setWaBackendUrl(finalUrl);
@@ -502,34 +502,46 @@ export default function ShopAuto() {
 
   const handleTestWaMessage = async () => {
     if (!whatsappDestination) {
-      toast({ title: "Error", description: "Tentukan nomor tujuan atau ID grup WA.", variant: "destructive" });
+      toast({ title: "Error", description: "Tentukan nomor tujuan.", variant: "destructive" });
       return;
     }
+
+    // Ensure the sender ID is valid
+    const senderId = waAdminType === "system" ? "admin" : user?.id;
+    if (!senderId) {
+      toast({ title: "Error", description: "User ID tidak ditemukan. Harap login ulang.", variant: "destructive" });
+      return;
+    }
+
     setIsSendingWaTest(true);
     const testText = testWaMessage.trim() || "🚀 *ShopAuto Test Message*\n\nWhatsApp Forwarding berhasil terhubung!";
     
+    // CLEAN THE NUMBER: 
+    // 1. Remove non-digits
+    let cleanNumber = whatsappDestination.replace(/\D/g, '');
+    
+    // 2. Auto-format: If it starts with '0', change to '62' (Indonesia standard)
+    if (cleanNumber.startsWith('0')) {
+      cleanNumber = '62' + cleanNumber.slice(1);
+    }
+    
     console.log("DEBUG: Sending Test WA", { 
       type: waAdminType, 
-      dest: whatsappDestination, 
+      dest: cleanNumber, 
       url: waBackendUrl,
       message: testText 
     });
 
     try {
-      const targetUrl = `${waBackendUrl.replace(/\/$/, '')}/send-message`;
+      const baseUrl = waBackendUrl.replace(/\/$/, '');
+      const targetUrl = `${baseUrl}/send-message`;
       
-      const payload: any = { 
-        number: whatsappDestination, 
-        message: testText 
+      const payload = { 
+        number: cleanNumber, 
+        message: testText,
+        sender: senderId
       };
       
-      if (waAdminType === "system") {
-        payload.sender = "admin";
-      } else {
-        // For custom user sender, pass their unique ID
-        payload.sender = user?.id;
-      }
-
       const resp = await fetch(targetUrl, {
         method: 'POST',
         headers: { 
@@ -539,14 +551,28 @@ export default function ShopAuto() {
       });
       
       const data = await resp.json();
-      if (data.success) {
+      
+      if (resp.ok && data.success) {
         toast({ title: "Berhasil terkirim" });
       } else {
-        throw new Error(data.error || "Gagal mengirim via VPS.");
+        // Catch specific VPS errors
+        const errMsg = data.error || data.details || "Gagal mengirim via VPS.";
+        
+        if (errMsg.includes("No LID") || errMsg.includes("invalid")) {
+          throw new Error("Nomor tujuan tidak terdaftar di WhatsApp atau format salah.");
+        }
+        
+        throw new Error(errMsg);
       }
     } catch (err: any) {
       console.error("DEBUG: WA Test Failed", err);
-      toast({ title: "WA Error", description: err.message, variant: "destructive" });
+      toast({ 
+        title: "Gagal Kirim", 
+        description: err.message.includes("Failed to fetch") 
+          ? "Koneksi ke server gagal (CORS/HTTPS Block)." 
+          : err.message, 
+        variant: "destructive" 
+      });
     } finally {
       setIsSendingWaTest(false);
     }
@@ -609,11 +635,20 @@ export default function ShopAuto() {
   };
 
   const connectShopee = () => {
+    // Just open the auth window, don't set connected yet as we need a real callback
     window.open("https://partner.shopeemobile.com/api/v1/shop/auth_partner", "_blank");
-    setIsShopeeConnected(true);
-    setShopeStoreName("My Store");
-    setShopeShopId("12345678");
-    saveSettings({ isShopeeConnected: true, shopeStoreName: "My Store", shopeShopId: "12345678" });
+    toast({
+      title: "Shopee Auth",
+      description: "Opening Shopee Seller Centre... Please follow instructions there.",
+    });
+  };
+
+  const disconnectShopee = () => {
+    setIsShopeeConnected(false);
+    setShopeStoreName("");
+    setShopeShopId("");
+    saveSettings({ isShopeeConnected: false, shopeStoreName: "", shopeShopId: "" });
+    toast({ title: "Shopee Terputus", description: "Koneksi Shopee telah dihapus." });
   };
 
   const disconnectWa = async () => {
@@ -715,7 +750,19 @@ export default function ShopAuto() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <Card className="bg-white border-slate-200 text-slate-900">
                 <CardHeader className="pb-2"><CardTitle className="text-xs font-bold uppercase text-slate-500 flex items-center gap-2"><ShoppingBag size={14} className="text-orange-500" /> Shopee Status</CardTitle></CardHeader>
-                <CardContent>{isShopeeConnected ? <div className="flex items-center justify-between"><span className="font-bold">{shopeStoreName}</span><Badge className="bg-green-600">CONNECTED</Badge></div> : <Button onClick={connectShopee} size="sm" className="w-full bg-orange-600 hover:bg-orange-700 text-white shadow-sm">Connect Store</Button>}</CardContent>
+                <CardContent>
+                  {isShopeeConnected ? (
+                    <div className="flex flex-col gap-2">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold truncate max-w-[120px]">{shopeStoreName || "Store Connected"}</span>
+                        <Badge className="bg-green-600">CONNECTED</Badge>
+                      </div>
+                      <Button variant="ghost" size="xs" onClick={disconnectShopee} className="text-red-500 hover:text-red-600 hover:bg-red-50 h-6 text-[10px] font-bold p-0">DISCONNECT</Button>
+                    </div>
+                  ) : (
+                    <Button onClick={connectShopee} size="sm" className="w-full bg-orange-600 hover:bg-orange-700 text-white shadow-sm font-bold">Connect Store</Button>
+                  )}
+                </CardContent>
               </Card>
               <Card className="bg-white border-slate-200 text-slate-900">
                 <CardHeader className="pb-2"><CardTitle className="text-xs font-bold uppercase text-slate-500 flex items-center gap-2"><Cpu size={14} className="text-purple-600" /> AI Auto Chat</CardTitle></CardHeader>
@@ -831,7 +878,24 @@ export default function ShopAuto() {
                 <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-200 mb-4 shadow-inner">
                   <div className="flex items-center gap-3">
                     <div className={`p-2 rounded-full ${autoOrderEnabled ? 'bg-orange-500/10 text-orange-600 shadow-[0_0_15px_rgba(249,115,22,0.1)]' : 'bg-slate-200 text-slate-400'}`}><ShoppingBag size={20} /></div>
-                    <div><p className="font-bold">Aktifkan Auto Order Capture</p><p className="text-xs text-slate-500 italic">Capture detail order Shopee (Resi, Kurir, Produk) ke WhatsApp.</p></div>
+                    <div>
+                      <p className="font-bold">Aktifkan Auto Order Capture</p>
+                      <p className="text-xs text-slate-500 italic">Capture detail order Shopee (Resi, Kurir, Produk) ke WhatsApp.</p>
+                      <div className="mt-3 pt-2 border-t border-slate-200/60 space-y-1">
+                        <p className="text-[11px] flex items-center gap-2">
+                          <span className="text-slate-400 font-medium">Data Pengirim:</span>
+                          <span className={`font-bold ${waAdminType === 'system' ? 'text-blue-600' : (isWaConnected ? 'text-green-600' : 'text-slate-400')}`}>
+                            {waAdminType === "system" ? "Admin Sender" : (isWaConnected ? "User Sender" : "None")}
+                          </span>
+                        </p>
+                        <p className="text-[11px] flex items-center gap-2">
+                          <span className="text-slate-400 font-medium">Penerima:</span>
+                          <span className={`font-bold ${whatsappDestination ? 'text-slate-700' : 'text-slate-400'}`}>
+                            {whatsappDestination || "None"}
+                          </span>
+                        </p>
+                      </div>
+                    </div>
                   </div>
                   <Switch checked={autoOrderEnabled} onCheckedChange={(v) => handleToggle("autoOrderEnabled", v)} />
                 </div>
