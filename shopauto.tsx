@@ -595,16 +595,19 @@ export default function ShopAuto() {
 
     setIsFetchingGroups(true);
     try {
-      // Securely fetch groups via Supabase Edge Function proxy
-      const { data, error: invokeError } = await supabase.functions.invoke('shopauto-handler', {
-        body: { 
-          action: "get_groups",
-          sender: sender,
-          waBackendUrl: waBackendUrl
+      // Direct connection to VPS (Bypasses Supabase Edge Function & waApiKey error)
+      const response = await fetch(`${waBackendUrl}/groups?sender=${sender}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json'
         }
       });
 
-      if (invokeError) throw invokeError;
+      if (!response.ok) {
+        throw new Error(`VPS Error: ${response.statusText}`);
+      }
+
+      const data = await response.json();
       
       console.log("List of Groups:", data);
       
