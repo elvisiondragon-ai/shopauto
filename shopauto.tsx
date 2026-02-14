@@ -410,11 +410,13 @@ export default function ShopAuto() {
       setIsWaConnected(settings.isWaConnected || false);
       setWaAccount(settings.waAccount || "");
       
-      // Auto-migrate localhost to VPS IP
+      // Auto-migrate old IP or localhost to secure domain
       const savedUrl = settings.waBackendUrl;
-      const finalUrl = (savedUrl === "http://localhost:3000" || savedUrl === "http://localhost:8080" || !savedUrl) 
-        ? "https://api.elvisiongroup.com" 
-        : savedUrl;
+      const isOldUrl = !savedUrl || 
+                       savedUrl.includes("localhost") || 
+                       savedUrl.includes("148.230.101.96");
+      
+      const finalUrl = isOldUrl ? "https://api.elvisiongroup.com" : savedUrl;
       
       setWaBackendUrl(finalUrl);
       hasLoadedRef.current = user.id;
