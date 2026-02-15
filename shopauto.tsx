@@ -458,21 +458,12 @@ export default function ShopAuto() {
   const handleTestChat = async () => {
     let realKey = apiKey === "********" ? userProfile?.shopauto_settings?.apiKey : apiKey;
     
-    if (aiProviderType === "system") {
-      toast({ title: "Secure Mode", description: "System AI is managed via Cloud. Key is hidden for safety." });
-      // In production, this should call a Supabase Edge Function that has the key stored in secrets.
-      return;
-    }
-
-    if (!realKey) {
-      toast({ title: "Error", description: "Masukkan API Key terlebih dahulu.", variant: "destructive" });
-      return;
-    }
     if (!testChatMessage.trim()) return;
     const userMsg = testChatMessage;
     setTestChatHistory(prev => [...prev, { role: 'user', content: userMsg }]);
     setTestChatMessage("");
     setIsSendingTest(true);
+
     try {
       // Determine marketplace context
       let marketplaceContext = "Shopee";
@@ -481,25 +472,58 @@ export default function ShopAuto() {
       if (isShopeeConnected && isTiktokConnected) marketplaceContext = "Multi-Channel (Shopee & TikTok)";
 
       const prompt = `You are an expert ${marketplaceContext} Sales Assistant.\nKnowledge Base: ${aiKnowledgeEssay || "Answer helpfully."}\nUser: ${userMsg}\nAssistant:`;
-      const currentEngine = aiEngine;
+
       let aiResponse = "";
-      if (currentEngine === "openai") {
-        const resp = await fetch("https://api.openai.com/v1/chat/completions", {
+
+      if (aiProviderType === "system") {
+        // Call Supabase Edge Function for System AI
+        const { data: { session } } = await supabase.auth.getSession();
+        const resp = await fetch("https://nlrgdhpmsittuwiiindq.supabase.co/functions/v1/shopauto-handler", {
           method: "POST",
-          headers: { "Authorization": `Bearer ${realKey}`, "Content-Type": "application/json" },
-          body: JSON.stringify({ model: "gpt-4o-mini", messages: [{ role: "user", content: prompt }] })
+          headers: { 
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${session?.access_token}`
+          },
+          body: JSON.stringify({ 
+            action: "chat",
+            prompt: prompt,
+            user_email: user?.email
+          })
         });
+
+        if (!resp.ok) {
+          const errorData = await resp.json();
+          throw new Error(errorData.error || "System AI failed to respond");
+        }
+
         const data = await resp.json();
-        aiResponse = data.choices?.[0]?.message?.content || "No response.";
+        aiResponse = data.response || data.content || "No response from System AI.";
       } else {
-        const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${realKey}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
-        });
-        const data = await resp.json();
-        aiResponse = data.candidates?.[0]?.content?.parts?.[0]?.text || "No response.";
+        // Custom Provider logic
+        if (!realKey) {
+          throw new Error("Masukkan API Key terlebih dahulu.");
+        }
+
+        const currentEngine = aiEngine;
+        if (currentEngine === "openai") {
+          const resp = await fetch("https://api.openai.com/v1/chat/completions", {
+            method: "POST",
+            headers: { "Authorization": `Bearer ${realKey}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ model: "gpt-4o-mini", messages: [{ role: "user", content: prompt }] })
+          });
+          const data = await resp.json();
+          aiResponse = data.choices?.[0]?.message?.content || "No response.";
+        } else {
+          const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${realKey}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+          });
+          const data = await resp.json();
+          aiResponse = data.candidates?.[0]?.content?.parts?.[0]?.text || "No response.";
+        }
       }
+
       setTestChatHistory(prev => [...prev, { role: 'ai', content: aiResponse }]);
     } catch (err: any) {
       toast({ title: "Chat Error", description: err.message, variant: "destructive" });
