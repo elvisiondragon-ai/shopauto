@@ -59,6 +59,16 @@ export default function ShopAuto() {
   const [shopePartnerId, setShopePartnerId] = useState("");
   const [shopePartnerKey, setShopePartnerKey] = useState("");
 
+  // TikTok Shop Connection State
+  const [isTiktokConnected, setIsTiktokConnected] = useState(false);
+  const [tiktokShopName, setTiktokShopName] = useState("");
+  const [tiktokShopId, setTiktokShopId] = useState("");
+
+  // Tokopedia Connection State
+  const [isTokopediaConnected, setIsTokopediaConnected] = useState(false);
+  const [tokopediaShopName, setTokopediaShopName] = useState("");
+  const [tokopediaShopId, setTokopediaShopId] = useState("");
+
   // Auto Chat & AI Settings
   const [autoChatEnabled, setAutoChatEnabled] = useState(false);
   const [autoOrderEnabled, setAutoOrderEnabled] = useState(false);
@@ -98,6 +108,12 @@ export default function ShopAuto() {
       setShopeShopId("");
       setShopePartnerId("");
       setShopePartnerKey("");
+      setIsTiktokConnected(false);
+      setTiktokShopName("");
+      setTiktokShopId("");
+      setIsTokopediaConnected(false);
+      setTokopediaShopName("");
+      setTokopediaShopId("");
       setAutoChatEnabled(false);
       setAutoOrderEnabled(false);
       setAiKnowledgeEssay("");
@@ -149,6 +165,12 @@ export default function ShopAuto() {
         shopeShopId: overrides.shopeShopId ?? shopeShopId,
         shopePartnerId: overrides.shopePartnerId ?? shopePartnerId,
         shopePartnerKey: overrides.shopePartnerKey ?? shopePartnerKey,
+        isTiktokConnected: overrides.isTiktokConnected ?? isTiktokConnected,
+        tiktokShopName: overrides.tiktokShopName ?? tiktokShopName,
+        tiktokShopId: overrides.tiktokShopId ?? tiktokShopId,
+        isTokopediaConnected: overrides.isTokopediaConnected ?? isTokopediaConnected,
+        tokopediaShopName: overrides.tokopediaShopName ?? tokopediaShopName,
+        tokopediaShopId: overrides.tokopediaShopId ?? tokopediaShopId,
         autoChatEnabled: overrides.autoChatEnabled ?? autoChatEnabled,
         autoOrderEnabled: overrides.autoOrderEnabled ?? autoOrderEnabled,
         aiKnowledgeEssay: overrides.aiKnowledgeEssay ?? aiKnowledgeEssay,
@@ -402,6 +424,12 @@ export default function ShopAuto() {
       setShopeShopId(settings.shopeShopId || "");
       setShopePartnerId(settings.shopePartnerId || "");
       setShopePartnerKey(settings.shopePartnerKey || "");
+      setIsTiktokConnected(settings.isTiktokConnected || false);
+      setTiktokShopName(settings.tiktokShopName || "");
+      setTiktokShopId(settings.tiktokShopId || "");
+      setIsTokopediaConnected(settings.isTokopediaConnected || false);
+      setTokopediaShopName(settings.tokopediaShopName || "");
+      setTokopediaShopId(settings.tokopediaShopId || "");
       setAutoChatEnabled(settings.autoChatEnabled || false);
       setAutoOrderEnabled(settings.autoOrderEnabled || false);
       setAiKnowledgeEssay(settings.aiKnowledgeEssay || "");
@@ -446,7 +474,13 @@ export default function ShopAuto() {
     setTestChatMessage("");
     setIsSendingTest(true);
     try {
-      const prompt = `You are a Shopee Sales Assistant.\nKnowledge Base: ${aiKnowledgeEssay || "Answer helpfully."}\nUser: ${userMsg}\nAssistant:`;
+      // Determine marketplace context
+      let marketplaceContext = "Shopee";
+      if (isTiktokConnected) marketplaceContext = "TikTok Shop";
+      if (isTokopediaConnected) marketplaceContext = "Tokopedia";
+      if (isShopeeConnected && isTiktokConnected) marketplaceContext = "Multi-Channel (Shopee & TikTok)";
+
+      const prompt = `You are an expert ${marketplaceContext} Sales Assistant.\nKnowledge Base: ${aiKnowledgeEssay || "Answer helpfully."}\nUser: ${userMsg}\nAssistant:`;
       const currentEngine = aiEngine;
       let aiResponse = "";
       if (currentEngine === "openai") {
@@ -519,12 +553,14 @@ export default function ShopAuto() {
     const testText = testWaMessage.trim() || "🚀 *ShopAuto Test Message*\n\nWhatsApp Forwarding berhasil terhubung!";
     
     // CLEAN THE NUMBER: 
-    // 1. Remove non-digits
-    let cleanNumber = whatsappDestination.replace(/\D/g, '');
+    let cleanNumber = whatsappDestination.trim();
     
-    // 2. Auto-format: If it starts with '0', change to '62' (Indonesia standard)
-    if (cleanNumber.startsWith('0')) {
-      cleanNumber = '62' + cleanNumber.slice(1);
+    // blocker not allowed trim it grup id that has @ or g.us
+    if (!cleanNumber.includes('@')) {
+      cleanNumber = cleanNumber.replace(/\D/g, '');
+      if (cleanNumber.startsWith('0')) {
+        cleanNumber = '62' + cleanNumber.slice(1);
+      }
     }
     
     console.log("DEBUG: Sending Test WA", { 
@@ -656,6 +692,32 @@ export default function ShopAuto() {
     toast({ title: "Shopee Terputus", description: "Koneksi Shopee telah dihapus." });
   };
 
+  const connectTikTok = () => {
+    window.open("https://services.tiktokshop.com/open/authorize", "_blank");
+    toast({ title: "TikTok Shop Auth", description: "Opening TikTok Shop Seller Center..." });
+  };
+
+  const disconnectTikTok = () => {
+    setIsTiktokConnected(false);
+    setTiktokShopName("");
+    setTiktokShopId("");
+    saveSettings({ isTiktokConnected: false, tiktokShopName: "", tiktokShopId: "" });
+    toast({ title: "TikTok Shop Terputus" });
+  };
+
+  const connectTokopedia = () => {
+    window.open("https://seller.tokopedia.com/edu/tokopedia-api/", "_blank");
+    toast({ title: "Tokopedia Auth", description: "Opening Tokopedia Developer Console..." });
+  };
+
+  const disconnectTokopedia = () => {
+    setIsTokopediaConnected(false);
+    setTokopediaShopName("");
+    setTokopediaShopId("");
+    saveSettings({ isTokopediaConnected: false, tokopediaShopName: "", tokopediaShopId: "" });
+    toast({ title: "Tokopedia Terputus" });
+  };
+
   const disconnectWa = async () => {
     if (!confirm("Are you sure you want to logout?")) return;
 
@@ -759,16 +821,51 @@ export default function ShopAuto() {
                   {isShopeeConnected ? (
                     <div className="flex flex-col gap-2">
                       <div className="flex items-center justify-between">
-                        <span className="font-bold truncate max-w-[120px]">{shopeStoreName || "Store Connected"}</span>
+                        <span className="font-bold truncate max-w-[120px]">{shopeStoreName || "Shopee Store"}</span>
                         <Badge className="bg-green-600">CONNECTED</Badge>
                       </div>
                       <Button variant="ghost" size="xs" onClick={disconnectShopee} className="text-red-500 hover:text-red-600 hover:bg-red-50 h-6 text-[10px] font-bold p-0">DISCONNECT</Button>
                     </div>
                   ) : (
-                    <Button onClick={connectShopee} size="sm" className="w-full bg-orange-600 hover:bg-orange-700 text-white shadow-sm font-bold">Connect Store</Button>
+                    <Button onClick={connectShopee} size="sm" className="w-full bg-orange-600 hover:bg-orange-700 text-white shadow-sm font-bold">Connect Shopee</Button>
                   )}
                 </CardContent>
               </Card>
+
+              <Card className="bg-white border-slate-200 text-slate-900">
+                <CardHeader className="pb-2"><CardTitle className="text-xs font-bold uppercase text-slate-500 flex items-center gap-2"><ShoppingBag size={14} className="text-pink-600" /> TikTok Status</CardTitle></CardHeader>
+                <CardContent>
+                  {isTiktokConnected ? (
+                    <div className="flex flex-col gap-2">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold truncate max-w-[120px]">{tiktokShopName || "TikTok Store"}</span>
+                        <Badge className="bg-green-600">CONNECTED</Badge>
+                      </div>
+                      <Button variant="ghost" size="xs" onClick={disconnectTikTok} className="text-red-500 hover:text-red-600 hover:bg-red-50 h-6 text-[10px] font-bold p-0">DISCONNECT</Button>
+                    </div>
+                  ) : (
+                    <Button onClick={connectTikTok} size="sm" className="w-full bg-slate-900 hover:bg-slate-800 text-white shadow-sm font-bold">Connect TikTok</Button>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card className="bg-white border-slate-200 text-slate-900">
+                <CardHeader className="pb-2"><CardTitle className="text-xs font-bold uppercase text-slate-500 flex items-center gap-2"><ShoppingBag size={14} className="text-green-600" /> Tokopedia Status</CardTitle></CardHeader>
+                <CardContent>
+                  {isTokopediaConnected ? (
+                    <div className="flex flex-col gap-2">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold truncate max-w-[120px]">{tokopediaShopName || "Tokopedia Store"}</span>
+                        <Badge className="bg-green-600">CONNECTED</Badge>
+                      </div>
+                      <Button variant="ghost" size="xs" onClick={disconnectTokopedia} className="text-red-500 hover:text-red-600 hover:bg-red-50 h-6 text-[10px] font-bold p-0">DISCONNECT</Button>
+                    </div>
+                  ) : (
+                    <Button onClick={connectTokopedia} size="sm" className="w-full bg-green-600 hover:bg-green-700 text-white shadow-sm font-bold">Connect Tokped</Button>
+                  )}
+                </CardContent>
+              </Card>
+
               <Card className="bg-white border-slate-200 text-slate-900">
                 <CardHeader className="pb-2"><CardTitle className="text-xs font-bold uppercase text-slate-500 flex items-center gap-2"><Cpu size={14} className="text-purple-600" /> AI Auto Chat</CardTitle></CardHeader>
                 <CardContent><div className="flex items-center justify-between"><span className="font-bold">{aiProviderType.toUpperCase()}</span><Badge variant="outline" className={autoChatEnabled ? "border-green-600 text-green-600" : "border-red-600 text-red-600"}>{autoChatEnabled ? "ON" : "OFF"}</Badge></div></CardContent>
