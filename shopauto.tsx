@@ -693,8 +693,6 @@ export default function ShopAuto() {
   const fetchAvailableGroups = async () => {
     // if (waAdminType === "system") { ... } // Removed per request
 
-    const sender = waAdminType === "system" ? "system" : "user";
-    
     // Use Cloudflare Worker as Proxy to bypass CORS on the GET request
     const workerUrl = "https://middleware.elclawvision.workers.dev/";
     const token = "4f46b29bf8e0e4443d9e631007324b29199443786d8b4befab3a2d529208583f";

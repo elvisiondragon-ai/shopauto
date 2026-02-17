@@ -1,6 +1,6 @@
-name = "shopauto-webhook"
-main = "cloudflare-worker.js"
+name = "shopauto-website"
 compatibility_date = "2024-02-17"
+pages_build_output_dir = "dist"
 
 [observability]
 enabled = true
