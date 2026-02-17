@@ -89,7 +89,7 @@ export default function ShopAuto() {
   const [qrTimestamp, setQrTimestamp] = useState<number | null>(null);
   const [qrRemaining, setQrRemaining] = useState<number>(40);
   const [, setWaStatus] = useState<"disconnected" | "connecting" | "connected">("disconnected");
-  const [waBackendUrl, setWaBackendUrl] = useState("https://api.elvisiongroup.com");
+  const [waBackendUrl, setWaBackendUrl] = useState("https://watzapp.web.id");
   const [isSendingWaTest, setIsSendingWaTest] = useState(false);
   const [testWaMessage, setTestWaMessage] = useState("");
   const [availableGroups, setAvailableGroups] = useState<{id: string, name: string}[]>([]);
@@ -242,7 +242,8 @@ export default function ShopAuto() {
 
   // --- WA LOGIC ---
   useEffect(() => {
-    if (waAdminType !== "custom" || !user) return;
+    // DISALBLED: Only run if custom mode is active and we have a valid URL
+    if (waAdminType !== "custom" || !user || !waBackendUrl.includes('.')) return;
 
     const normalizedUrl = waBackendUrl.replace(/\/$/, '');
     
@@ -369,7 +370,7 @@ export default function ShopAuto() {
 
   // Initial Status Check
   useEffect(() => {
-    if (waAdminType !== "custom") return;
+    if (waAdminType !== "custom" || !user || !waBackendUrl.includes('.')) return;
     
     const checkInitialStatus = async () => {
       try {
@@ -442,14 +443,39 @@ export default function ShopAuto() {
       const savedUrl = settings.waBackendUrl;
       const isOldUrl = !savedUrl || 
                        savedUrl.includes("localhost") || 
-                       savedUrl.includes("148.230.101.96");
+                       savedUrl.includes("148.230.101.96") ||
+                       savedUrl.includes("api.elvisiongroup.com");
       
-      const finalUrl = isOldUrl ? "https://api.elvisiongroup.com" : savedUrl;
+      const finalUrl = isOldUrl ? "http://103.150.101.58:2341" : savedUrl;
       
       setWaBackendUrl(finalUrl);
       hasLoadedRef.current = user.id;
     } else if (userProfile) {
-      // User has a profile but no shopauto_settings yet - stop loading
+      // User has a profile but no shopauto_settings yet - stop loading AND CLEAR STATE
+      console.log("📂 New user detected (no settings), resetting state.");
+      setAiProviderType("system");
+      setAiEngine("openai");
+      setApiKey("");
+      setIsShopeeConnected(false);
+      setShopeStoreName("");
+      setShopeShopId("");
+      setShopePartnerId("");
+      setShopePartnerKey("");
+      setIsTiktokConnected(false);
+      setTiktokShopName("");
+      setTiktokShopId("");
+      setIsTokopediaConnected(false);
+      setTokopediaShopName("");
+      setTokopediaShopId("");
+      setAutoChatEnabled(false);
+      setAutoOrderEnabled(false);
+      setAiKnowledgeEssay("");
+      setWhatsappDestination("");
+      setWaAdminType("system");
+      setIsWaConnected(false);
+      setWaAccount("");
+      setWaBackendUrl("https://watzapp.web.id");
+      
       hasLoadedRef.current = user.id;
     }
   }, [user, userProfile]);
@@ -595,32 +621,56 @@ export default function ShopAuto() {
     });
 
     try {
-      const baseUrl = waBackendUrl.replace(/\/$/, '');
-      const targetUrl = `${baseUrl}/send-message`;
+      let resp;
+      if (waAdminType === "system") {
+        // Route through Cloudflare Middleman (Now fixed with correct domain)
+        const targetUrl = "https://middleware.elclawvision.workers.dev/";
+        const payload = { 
+          // Custom flag so the worker knows this is a manual test/system send
+          is_system_send: true,
+          to: cleanNumber,
+          message: testText
+        };
+        
+        resp = await fetch(targetUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+      } else {
+        const baseUrl = waBackendUrl.replace(/\/$/, '');
+        const targetUrl = `${baseUrl}/api/message`;
+        
+        const payload = { 
+          token: "4f46b29bf8e0e4443d9e631007324b29199443786d8b4befab3a2d529208583f",
+          to: cleanNumber, 
+          message: testText
+        };
+        
+        resp = await fetch(targetUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+      }
       
-      const payload = { 
-        number: cleanNumber, 
-        message: testText,
-        sender: senderId
-      };
+      const responseText = await resp.text();
+      let data;
+      try {
+        data = JSON.parse(responseText);
+      } catch (e) {
+        data = { message: responseText };
+      }
       
-      const resp = await fetch(targetUrl, {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(payload)
-      });
+      // Flexible check for success across different APIs
+      const isSuccess = resp.ok && (data.success || data.status === true || data.message === "success" || data.status === "success" || data.message === "Message sent successfully");
       
-      const data = await resp.json();
-      
-      if (resp.ok && data.success) {
+      if (isSuccess) {
         toast({ title: "Berhasil terkirim" });
       } else {
-        // Catch specific VPS errors
-        const errMsg = data.error || data.details || "Gagal mengirim via VPS.";
+        const errMsg = data.error || data.details || data.message || "Gagal mengirim.";
         
-        if (errMsg.includes("No LID") || errMsg.includes("invalid")) {
+        if (typeof errMsg === 'string' && (errMsg.includes("No LID") || errMsg.includes("invalid"))) {
           throw new Error("Nomor tujuan tidak terdaftar di WhatsApp atau format salah.");
         }
         
@@ -631,7 +681,7 @@ export default function ShopAuto() {
       toast({ 
         title: "Gagal Kirim", 
         description: err.message.includes("Failed to fetch") 
-          ? "Koneksi ke server gagal (CORS/HTTPS Block)." 
+          ? "Koneksi ke server gagal (Mixed Content / HTTPS Block)." 
           : err.message, 
         variant: "destructive" 
       });
@@ -641,26 +691,26 @@ export default function ShopAuto() {
   };
 
   const fetchAvailableGroups = async () => {
-    const sender = waAdminType === "system" ? "admin" : "user";
-    
-    // Restriction: Only authorized admins can fetch from 'admin' sender
-    if (sender === "admin" && user?.email && !['elvisiondragon@gmail.com', 'dragon@gmail.com', 'deliamutia2001@gmail.com'].includes(user.email)) {
-      toast({
-        title: "Akses Ditolak",
-        description: "Hanya Admin yang dapat mencari ID Grup menggunakan Admin Sender. Silakan ganti ke User Sender.",
-        variant: "destructive"
-      });
-      return;
-    }
+    // if (waAdminType === "system") { ... } // Removed per request
 
+    const sender = waAdminType === "system" ? "system" : "user";
+    
+    // Use Cloudflare Worker as Proxy to bypass CORS on the GET request
+    const workerUrl = "https://middleware.elclawvision.workers.dev/";
+    const token = "4f46b29bf8e0e4443d9e631007324b29199443786d8b4befab3a2d529208583f";
+    
     setIsFetchingGroups(true);
     try {
-      // Direct connection to VPS (Bypasses Supabase Edge Function & waApiKey error)
-      const response = await fetch(`${waBackendUrl}/groups?sender=${sender}`, {
-        method: 'GET',
+      // Send POST to Worker with action="fetch_groups"
+      const response = await fetch(workerUrl, {
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json'
-        }
+        },
+        body: JSON.stringify({
+          action: "fetch_groups",
+          token: token
+        })
       });
 
       if (!response.ok) {
@@ -671,9 +721,11 @@ export default function ShopAuto() {
       
       console.log("List of Groups:", data);
       
-      if (Array.isArray(data)) {
-        setAvailableGroups(data);
-        if (data.length === 0) {
+      const groups = Array.isArray(data) ? data : (data.data || []);
+      
+      if (Array.isArray(groups)) {
+        setAvailableGroups(groups);
+        if (groups.length === 0) {
           toast({ 
             title: "Tidak Ada Grup", 
             description: "Pastikan WhatsApp sudah terhubung dan Anda memiliki grup.",
@@ -681,7 +733,7 @@ export default function ShopAuto() {
         } else {
           toast({ 
             title: "Grup Ditemukan", 
-            description: `Berhasil mengambil ${data.length} grup.`,
+            description: `Berhasil mengambil ${groups.length} grup.`,
           });
         }
       } else {
@@ -902,9 +954,8 @@ export default function ShopAuto() {
 
             {user?.email && ['elvisiondragon@gmail.com', 'tester123@gmail.com', 'dragon@gmail.com', 'deliamutia2001@gmail.com'].includes(user.email) && (
               <Card className="bg-white border-slate-200 text-slate-900">
-                <CardHeader><CardTitle className="flex items-center gap-2 text-blue-600 font-bold"><ExternalLink size={18} /> Integration Setup</CardTitle><CardDescription className="text-slate-500">Salin URL di bawah ini ke Shopee Seller Centre &gt; Webhook Settings.</CardDescription></CardHeader>
-                <CardContent><div className="space-y-2"><Label className="text-xs text-slate-500 uppercase font-bold">Webhook Push URL</Label><div className="flex gap-2"><Input readOnly value="https://nlrgdhpmsittuwiiindq.supabase.co/functions/v1/shopauto-handler" className="bg-slate-50 border-slate-200 text-xs font-mono text-blue-600" /><Button variant="outline" size="icon" className="hover:bg-blue-600 hover:text-white" onClick={() => {navigator.clipboard.writeText("https://nlrgdhpmsittuwiiindq.supabase.co/functions/v1/shopauto-handler"); toast({title: "Copied"});}}><Copy size={14} /></Button></div></div></CardContent>
-              </Card>
+                            <CardHeader><CardTitle className="flex items-center gap-2 text-blue-600 font-bold"><ExternalLink size={18} /> Integration Setup</CardTitle><CardDescription className="text-slate-500">Salin URL di bawah ini ke Shopee Seller Centre &gt; Webhook Settings.</CardDescription></CardHeader>
+                            <CardContent><div className="space-y-2"><Label className="text-xs text-slate-500 uppercase font-bold">Webhook Push URL</Label><div className="flex gap-2"><Input readOnly value="https://middleware.elclawvision.workers.dev/" className="bg-slate-50 border-slate-200 text-xs font-mono text-blue-600" /><Button variant="outline" size="icon" className="hover:bg-blue-600 hover:text-white" onClick={() => {navigator.clipboard.writeText("https://middleware.elclawvision.workers.dev/"); toast({title: "Copied"});}}><Copy size={14} /></Button></div></div></CardContent>              </Card>
             )}
           </TabsContent>
 
@@ -1011,7 +1062,7 @@ export default function ShopAuto() {
                         <p className="text-[11px] flex items-center gap-2">
                           <span className="text-slate-400 font-medium">Data Pengirim:</span>
                           <span className={`font-bold ${waAdminType === 'system' ? 'text-blue-600' : (isWaConnected ? 'text-green-600' : 'text-slate-400')}`}>
-                            {waAdminType === "system" ? "Admin Sender" : (isWaConnected ? "User Sender" : "None")}
+                            {waAdminType === "system" ? "Admin (Renata)" : (isWaConnected ? "User Sender" : "None")}
                           </span>
                         </p>
                         <p className="text-[11px] flex items-center gap-2">
@@ -1029,10 +1080,23 @@ export default function ShopAuto() {
               <CardContent className={`space-y-6 transition-all duration-500 ${!autoOrderEnabled ? "opacity-30 pointer-events-none blur-[0.5px]" : "opacity-100"}`}>
                 <div className="space-y-4">
                   <Label className="text-sm font-bold text-slate-500 uppercase tracking-widest">- Pengirim</Label>
-                  <Select value={waAdminType} onValueChange={(v: any) => handleToggle("waAdminType", v)}>
+                  <Select value={waAdminType} onValueChange={(v: any) => {
+                    if (v === "custom") {
+                      // alert("Maaf fitur ini belum tersedia, silahkan gunakan Admin Shopauto");
+                      // return; 
+                      // User requested just adding // at the moment cannot, but based on "Maaf..." prompt:
+                      // The prompt said: "do not delete for user sender just ad // at the moment cannot" 
+                      // AND "For user sender , maaf fitur ini belum tersedia, silahkan gunakan Admin Shopauto"
+                      
+                      // Implementing the alert as requested:
+                      alert("Maaf fitur ini belum tersedia, silahkan gunakan Admin Shopauto");
+                      return;
+                    }
+                    handleToggle("waAdminType", v);
+                  }}>
                     <SelectTrigger className="bg-white border-slate-200 h-14 text-lg font-bold"><SelectValue placeholder="Pilih Provider" /></SelectTrigger>
                     <SelectContent className="bg-white border-slate-200 text-slate-900">
-                      <SelectItem value="system">- Admin Sender (free)</SelectItem>
+                      <SelectItem value="system">- Admin Shopauto</SelectItem>
                       <SelectItem value="custom">User Sender</SelectItem>
                     </SelectContent>
                   </Select>
@@ -1040,10 +1104,10 @@ export default function ShopAuto() {
                   {waAdminType === "system" ? (
                     <div className="p-6 bg-blue-50 border border-blue-100 rounded-2xl space-y-3">
                       <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3"><CheckCircle2 className="text-blue-600" /><p className="font-bold text-blue-900">Infrastruktur eL Vision</p></div>
-                        <Badge className="bg-green-600 text-[10px] text-white">GRATIS</Badge>
+                        <div className="flex items-center gap-3"><CheckCircle2 className="text-blue-600" /><p className="font-bold text-blue-900">Shopauto Admin</p></div>
+                        <Badge className="bg-green-600 text-[10px] text-white">ACTIVE</Badge>
                       </div>
-                      <p className="text-xs text-slate-600 leading-relaxed">AI akan menggunakan nomor official kami untuk mengirim detail order ke Gudang anda secara otomatis.</p>
+                      <p className="text-xs text-slate-600 leading-relaxed">AI akan menggunakan nomor Shopauto (62895325633487) untuk mengirim detail order ke Gudang anda.</p>
                     </div>
                   ) : (
                     <div className="space-y-4">

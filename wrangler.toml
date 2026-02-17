@@ -1,0 +1,6 @@
+name = "shopauto-webhook"
+main = "cloudflare-worker.js"
+compatibility_date = "2024-02-17"
+
+[observability]
+enabled = true
