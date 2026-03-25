@@ -20,29 +20,16 @@ export default {
       const data = await request.json();
       
       // --- CONFIGURATION ---
-      const VPS_BASE_URL = "https://watzapp.web.id";
-      const VPS_API_MESSAGE = `${VPS_BASE_URL}/api/message`;
-      const VPS_API_GROUPS = `${VPS_BASE_URL}/api/group/fetch`; // New Endpoint
+      const WAWP_INSTANCE_ID = "5E5FA7591BBB";
+      const WAWP_ACCESS_TOKEN = "EKOSp9NBSuNVVU";
+      const WAWP_API_URL = "https://wawp.net/wp-json/awp/v1/send";
       
-      const VPS_TOKEN = "4f46b29bf8e0e4443d9e631007324b29199443786d8b4befab3a2d529208583f";
       const DEFAULT_DESTINATION = "6281383838013";
 
-      // --- NEW FEATURE: PROXY GROUP FETCH (CORS BYPASS) ---
+      // --- NEW FEATURE: PROXY GROUP FETCH (NOT SUPPORTED BY WAWP V1 DIRECTLY) ---
       if (data.action === "fetch_groups") {
-          const token = data.token || VPS_TOKEN; // Use provided token or default
-          const targetUrl = `${VPS_API_GROUPS}?token=${token}`;
-          
-          const groupResponse = await fetch(targetUrl, {
-              method: 'GET',
-              headers: { 'Content-Type': 'application/json' }
-          });
-          
-          const resultText = await groupResponse.text();
-          let jsonResult;
-          try { jsonResult = JSON.parse(resultText); } catch(e) { jsonResult = { raw: resultText }; }
-          
-          return new Response(JSON.stringify(jsonResult), {
-              status: groupResponse.status,
+          return new Response(JSON.stringify({ status: "error", message: "Group fetching is not supported on this endpoint" }), {
+              status: 400,
               headers: { ...corsHeaders, "Content-Type": "application/json" }
           });
       }
@@ -118,15 +105,13 @@ export default {
           });
       }
 
-      // --- FORWARD TO VPS ---
-      const waResponse = await fetch(VPS_API_MESSAGE, {
+      // --- FORWARD TO WAWP ---
+      const targetChatId = targetTo.includes("@") ? targetTo : `${targetTo}@c.us`;
+      const finalUrl = `${WAWP_API_URL}?instance_id=${WAWP_INSTANCE_ID}&access_token=${WAWP_ACCESS_TOKEN}&chatId=${targetChatId}&message=${encodeURIComponent(messageText)}`;
+
+      const waResponse = await fetch(finalUrl, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          token: VPS_TOKEN,
-          to: targetTo,
-          message: messageText
-        })
+        headers: { "Content-Type": "application/json" }
       });
 
       const result = await waResponse.text();

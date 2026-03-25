@@ -1,15 +1,17 @@
 /**
- * APIWORKER.js (Google Apps Script Version - FIXED DATE + MACRODROID)
- * Function: Reads corpnima@gmail.com, sends Shopee alerts to WhatsApp,
+ * APIWORKER.js (CODENAME NIMA - REVERT TO WATZAPP API)
+ * Function: Reads corpnima@gmail.com, sends Shopee alerts to WhatsApp via WatzApp VPS,
  *           AND triggers MacroDroid automation on phone.
  */
 
 function apiworker() {
-  // 1. CONFIGURATION
-  // Ditambah 'after:2026/02/18' agar email lama tahun 2024 tidak ikut terkirim.
-  const GMAIL_QUERY = 'is:unread after:2026/02/18 ("Pesanan" OR "Pembayaran" OR "segera kirimkan pesanan" OR "rincian pesanan")';
+  // 1. CONFIGURATION (WATZAPP API - REVERTED)
+  // MANDATORY: after:2026/03/12 to prevent spamming old emails
+  const GMAIL_QUERY = 'is:unread after:2026/03/12 (Pesanan OR Pembayaran OR "kirimkan pesanan" OR "rincian pesanan" OR "Shopee")';
+  
   const WA_API_URL = "https://watzapp.web.id/api/message";
   const WA_TOKEN = "4f46b29bf8e0e4443d9e631007324b29199443786d8b4befab3a2d529208583f";
+  
   const RECIPIENTS = ["62895325633487", "6285664733499"];
 
   // MacroDroid Webhook Configuration
@@ -19,7 +21,7 @@ function apiworker() {
   const threads = GmailApp.search(GMAIL_QUERY);
 
   if (threads.length === 0) {
-    Logger.log("No new Shopee email found (since 2026/02/18).");
+    Logger.log("No new Shopee email found (since 2026/03/12).");
     return;
   }
 
@@ -45,21 +47,13 @@ function apiworker() {
           Logger.log("⚠️ MacroDroid trigger failed [" + triggerName + "]: " + e.toString());
         }
 
-        const finalMessage = `🚀 *ROCKET NOTIFIKASI* 🚀
+        const finalMessage = `🚀 *ROCKET NOTIFIKASI* 🚀\n\n` +
+          `🧡 *SHOPEE INBOX DETECTED* 🧡\n\n` +
+          `👤 *From:* ${from}\n` +
+          `📧 *Subject:* ${subject}\n\n` +
+          `*Isi Pesan:*\n${body}...`;
 
-` +
-          `🧡 *SHOPEE INBOX DETECTED* 🧡
-
-` +
-          `👤 *From:* ${from}
-` +
-          `📧 *Subject:* ${subject}
-
-` +
-          `*Isi Pesan:*
-${body}...`;
-
-        // 3. SEND TO EACH RECIPIENT (WhatsApp)
+        // 3. SEND TO EACH RECIPIENT (WATZAPP API)
         for (const to of RECIPIENTS) {
           const payload = {
             token: WA_TOKEN,
@@ -76,13 +70,13 @@ ${body}...`;
 
           try {
             const response = UrlFetchApp.fetch(WA_API_URL, options);
-            Logger.log("Sent to " + to + ": " + response.getContentText());
+            Logger.log("Sent via WatzApp to " + to + ": " + response.getContentText());
           } catch (e) {
-            Logger.log("Error sending to " + to + ": " + e.toString());
+            Logger.log("Error sending via WatzApp to " + to + ": " + e.toString());
           }
         }
 
-        // 4. MARK AS READ (So it doesn't send twice)
+        // 4. MARK AS READ (CRITICAL: prevents sending again)
         message.markRead();
       }
     }

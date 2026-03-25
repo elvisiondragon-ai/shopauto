@@ -89,7 +89,7 @@ export default function ShopAuto() {
   const [qrTimestamp, setQrTimestamp] = useState<number | null>(null);
   const [qrRemaining, setQrRemaining] = useState<number>(40);
   const [, setWaStatus] = useState<"disconnected" | "connecting" | "connected">("disconnected");
-  const [waBackendUrl, setWaBackendUrl] = useState("https://watzapp.web.id");
+  const [waBackendUrl, setWaBackendUrl] = useState("https://wawp.net/wp-json/awp/v1/send");
   const [isSendingWaTest, setIsSendingWaTest] = useState(false);
   const [testWaMessage, setTestWaMessage] = useState("");
   const [availableGroups, setAvailableGroups] = useState<{id: string, name: string}[]>([]);
@@ -639,18 +639,15 @@ export default function ShopAuto() {
         });
       } else {
         const baseUrl = waBackendUrl.replace(/\/$/, '');
-        const targetUrl = `${baseUrl}/api/message`;
+        const targetChatId = cleanNumber.includes("@") ? cleanNumber : `${cleanNumber}@c.us`;
+        const instanceId = "5E5FA7591BBB";
+        const accessToken = "EKOSp9NBSuNVVU";
         
-        const payload = { 
-          token: "4f46b29bf8e0e4443d9e631007324b29199443786d8b4befab3a2d529208583f",
-          to: cleanNumber, 
-          message: testText
-        };
+        const finalUrl = `${baseUrl}?instance_id=${instanceId}&access_token=${accessToken}&chatId=${targetChatId}&message=${encodeURIComponent(testText)}`;
         
-        resp = await fetch(targetUrl, {
+        resp = await fetch(finalUrl, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
+          headers: { 'Content-Type': 'application/json' }
         });
       }
       
@@ -695,7 +692,7 @@ export default function ShopAuto() {
 
     // Use Cloudflare Worker as Proxy to bypass CORS on the GET request
     const workerUrl = "https://middleware.elclawvision.workers.dev/";
-    const token = "4f46b29bf8e0e4443d9e631007324b29199443786d8b4befab3a2d529208583f";
+    const token = "EKOSp9NBSuNVVU";
     
     setIsFetchingGroups(true);
     try {

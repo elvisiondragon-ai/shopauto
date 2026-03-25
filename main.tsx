@@ -7,7 +7,7 @@ import ShopAuto from './shopauto'
 import { Auth } from './components/Auth'
 import './index.css'
 
-const APP_VERSION = '2026.03.07.01'; // Force update for Reset Password fix
+const APP_VERSION = '2026.03.12.01'; // WAWP API Migration
 
 // Execute aggressive cache clearing before React mounts if versions mismatch
 if (localStorage.getItem('v_cache') !== APP_VERSION) {

@@ -8,8 +8,9 @@
 header('Content-Type: application/json');
 
 // 1. Configuration - Update these with your real values
-$WA_API_URL = "http://103.150.101.58:2341/api/message";
-$WA_TOKEN = "4f46b29bf8e0e4443d9e631007324b29199443786d8b4befab3a2d529208583f";
+$WAWP_INSTANCE_ID = "5E5FA7591BBB";
+$WAWP_ACCESS_TOKEN = "EKOSp9NBSuNVVU";
+$WAWP_API_URL = "https://wawp.net/wp-json/awp/v1/send";
 $DESTINATION_NUMBER = "6281383838013"; // Default destination if not provided
 
 // 2. Get incoming payload
@@ -38,16 +39,12 @@ $messageText .= "Detail: " . json_encode($data) . "
 $messageText .= "Silakan cek dashboard ShopAuto anda.";
 
 // 4. Forward to WhatsApp API
-$waPayload = [
-    "token" => $WA_TOKEN,
-    "to" => $DESTINATION_NUMBER,
-    "message" => $messageText
-];
+$targetChatId = strpos($DESTINATION_NUMBER, '@') !== false ? $DESTINATION_NUMBER : $DESTINATION_NUMBER . "@c.us";
+$finalUrl = $WAWP_API_URL . "?instance_id=" . $WAWP_INSTANCE_ID . "&access_token=" . $WAWP_ACCESS_TOKEN . "&chatId=" . $targetChatId . "&message=" . urlencode($messageText);
 
-$ch = curl_init($WA_API_URL);
+$ch = curl_init($finalUrl);
 curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
 curl_setopt($ch, CURLOPT_POST, true);
-curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($waPayload));
 curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
 
 $response = curl_exec($ch);
