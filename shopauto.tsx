@@ -59,15 +59,7 @@ export default function ShopAuto() {
   const [shopePartnerId, setShopePartnerId] = useState("");
   const [shopePartnerKey, setShopePartnerKey] = useState("");
 
-  // TikTok Shop Connection State
-  const [isTiktokConnected, setIsTiktokConnected] = useState(false);
-  const [tiktokShopName, setTiktokShopName] = useState("");
-  const [tiktokShopId, setTiktokShopId] = useState("");
 
-  // Tokopedia Connection State
-  const [isTokopediaConnected, setIsTokopediaConnected] = useState(false);
-  const [tokopediaShopName, setTokopediaShopName] = useState("");
-  const [tokopediaShopId, setTokopediaShopId] = useState("");
 
   // Auto Chat & AI Settings
   const [autoChatEnabled, setAutoChatEnabled] = useState(false);
@@ -108,12 +100,7 @@ export default function ShopAuto() {
       setShopeShopId("");
       setShopePartnerId("");
       setShopePartnerKey("");
-      setIsTiktokConnected(false);
-      setTiktokShopName("");
-      setTiktokShopId("");
-      setIsTokopediaConnected(false);
-      setTokopediaShopName("");
-      setTokopediaShopId("");
+
       setAutoChatEnabled(false);
       setAutoOrderEnabled(false);
       setAiKnowledgeEssay("");
@@ -165,12 +152,7 @@ export default function ShopAuto() {
         shopeShopId: overrides.shopeShopId ?? shopeShopId,
         shopePartnerId: overrides.shopePartnerId ?? shopePartnerId,
         shopePartnerKey: overrides.shopePartnerKey ?? shopePartnerKey,
-        isTiktokConnected: overrides.isTiktokConnected ?? isTiktokConnected,
-        tiktokShopName: overrides.tiktokShopName ?? tiktokShopName,
-        tiktokShopId: overrides.tiktokShopId ?? tiktokShopId,
-        isTokopediaConnected: overrides.isTokopediaConnected ?? isTokopediaConnected,
-        tokopediaShopName: overrides.tokopediaShopName ?? tokopediaShopName,
-        tokopediaShopId: overrides.tokopediaShopId ?? tokopediaShopId,
+
         autoChatEnabled: overrides.autoChatEnabled ?? autoChatEnabled,
         autoOrderEnabled: overrides.autoOrderEnabled ?? autoOrderEnabled,
         aiKnowledgeEssay: overrides.aiKnowledgeEssay ?? aiKnowledgeEssay,
@@ -425,12 +407,7 @@ export default function ShopAuto() {
       setShopeShopId(settings.shopeShopId || "");
       setShopePartnerId(settings.shopePartnerId || "");
       setShopePartnerKey(settings.shopePartnerKey || "");
-      setIsTiktokConnected(settings.isTiktokConnected || false);
-      setTiktokShopName(settings.tiktokShopName || "");
-      setTiktokShopId(settings.tiktokShopId || "");
-      setIsTokopediaConnected(settings.isTokopediaConnected || false);
-      setTokopediaShopName(settings.tokopediaShopName || "");
-      setTokopediaShopId(settings.tokopediaShopId || "");
+
       setAutoChatEnabled(settings.autoChatEnabled || false);
       setAutoOrderEnabled(settings.autoOrderEnabled || false);
       setAiKnowledgeEssay(settings.aiKnowledgeEssay || "");
@@ -461,12 +438,7 @@ export default function ShopAuto() {
       setShopeShopId("");
       setShopePartnerId("");
       setShopePartnerKey("");
-      setIsTiktokConnected(false);
-      setTiktokShopName("");
-      setTiktokShopId("");
-      setIsTokopediaConnected(false);
-      setTokopediaShopName("");
-      setTokopediaShopId("");
+
       setAutoChatEnabled(false);
       setAutoOrderEnabled(false);
       setAiKnowledgeEssay("");
@@ -493,9 +465,7 @@ export default function ShopAuto() {
     try {
       // Determine marketplace context
       let marketplaceContext = "Shopee";
-      if (isTiktokConnected) marketplaceContext = "TikTok Shop";
-      if (isTokopediaConnected) marketplaceContext = "Tokopedia";
-      if (isShopeeConnected && isTiktokConnected) marketplaceContext = "Multi-Channel (Shopee & TikTok)";
+
 
       const prompt = `You are an expert ${marketplaceContext} Sales Assistant.\nKnowledge Base: ${aiKnowledgeEssay || "Answer helpfully."}\nUser: ${userMsg}\nAssistant:`;
 
@@ -763,31 +733,7 @@ export default function ShopAuto() {
     toast({ title: "Shopee Terputus", description: "Koneksi Shopee telah dihapus." });
   };
 
-  const connectTikTok = () => {
-    window.open("https://services.tiktokshop.com/open/authorize", "_blank");
-    toast({ title: "TikTok Shop Auth", description: "Opening TikTok Shop Seller Center..." });
-  };
 
-  const disconnectTikTok = () => {
-    setIsTiktokConnected(false);
-    setTiktokShopName("");
-    setTiktokShopId("");
-    saveSettings({ isTiktokConnected: false, tiktokShopName: "", tiktokShopId: "" });
-    toast({ title: "TikTok Shop Terputus" });
-  };
-
-  const connectTokopedia = () => {
-    window.open("https://seller.tokopedia.com/edu/tokopedia-api/", "_blank");
-    toast({ title: "Tokopedia Auth", description: "Opening Tokopedia Developer Console..." });
-  };
-
-  const disconnectTokopedia = () => {
-    setIsTokopediaConnected(false);
-    setTokopediaShopName("");
-    setTokopediaShopId("");
-    saveSettings({ isTokopediaConnected: false, tokopediaShopName: "", tokopediaShopId: "" });
-    toast({ title: "Tokopedia Terputus" });
-  };
 
   const disconnectWa = async () => {
     if (!confirm("Are you sure you want to logout?")) return;
