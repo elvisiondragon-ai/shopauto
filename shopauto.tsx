@@ -904,40 +904,6 @@ export default function ShopAuto() {
               </Card>
 
               <Card className="bg-white border-slate-200 text-slate-900">
-                <CardHeader className="pb-2"><CardTitle className="text-xs font-bold uppercase text-slate-500 flex items-center gap-2"><ShoppingBag size={14} className="text-pink-600" /> TikTok Status</CardTitle></CardHeader>
-                <CardContent>
-                  {isTiktokConnected ? (
-                    <div className="flex flex-col gap-2">
-                      <div className="flex items-center justify-between">
-                        <span className="font-bold truncate max-w-[120px]">{tiktokShopName || "TikTok Store"}</span>
-                        <Badge className="bg-green-600">CONNECTED</Badge>
-                      </div>
-                      <Button variant="ghost" size="xs" onClick={disconnectTikTok} className="text-red-500 hover:text-red-600 hover:bg-red-50 h-6 text-[10px] font-bold p-0">DISCONNECT</Button>
-                    </div>
-                  ) : (
-                    <Button onClick={connectTikTok} size="sm" className="w-full bg-slate-900 hover:bg-slate-800 text-white shadow-sm font-bold">Connect TikTok</Button>
-                  )}
-                </CardContent>
-              </Card>
-
-              <Card className="bg-white border-slate-200 text-slate-900">
-                <CardHeader className="pb-2"><CardTitle className="text-xs font-bold uppercase text-slate-500 flex items-center gap-2"><ShoppingBag size={14} className="text-green-600" /> Tokopedia Status</CardTitle></CardHeader>
-                <CardContent>
-                  {isTokopediaConnected ? (
-                    <div className="flex flex-col gap-2">
-                      <div className="flex items-center justify-between">
-                        <span className="font-bold truncate max-w-[120px]">{tokopediaShopName || "Tokopedia Store"}</span>
-                        <Badge className="bg-green-600">CONNECTED</Badge>
-                      </div>
-                      <Button variant="ghost" size="xs" onClick={disconnectTokopedia} className="text-red-500 hover:text-red-600 hover:bg-red-50 h-6 text-[10px] font-bold p-0">DISCONNECT</Button>
-                    </div>
-                  ) : (
-                    <Button onClick={connectTokopedia} size="sm" className="w-full bg-green-600 hover:bg-green-700 text-white shadow-sm font-bold">Connect Tokped</Button>
-                  )}
-                </CardContent>
-              </Card>
-
-              <Card className="bg-white border-slate-200 text-slate-900">
                 <CardHeader className="pb-2"><CardTitle className="text-xs font-bold uppercase text-slate-500 flex items-center gap-2"><Cpu size={14} className="text-purple-600" /> AI Auto Chat</CardTitle></CardHeader>
                 <CardContent><div className="flex items-center justify-between"><span className="font-bold">{aiProviderType.toUpperCase()}</span><Badge variant="outline" className={autoChatEnabled ? "border-green-600 text-green-600" : "border-red-600 text-red-600"}>{autoChatEnabled ? "ON" : "OFF"}</Badge></div></CardContent>
               </Card>
