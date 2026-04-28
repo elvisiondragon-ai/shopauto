@@ -947,7 +947,7 @@ export default function ShopAuto() {
               </Card>
             </div>
 
-            {user?.email && ['elvisiondragon@gmail.com', 'tester123@gmail.com', 'dragon@gmail.com', 'deliamutia2001@gmail.com', 'test@yahoo.com'].includes(user.email) && (
+            {user?.email && ['elvisiondragon@gmail.com', 'tester123@gmail.com', 'test123@gmail.com', 'dragon@gmail.com', 'deliamutia2001@gmail.com', 'test@yahoo.com'].includes(user.email) && (
               <Card className="bg-white border-slate-200 text-slate-900">
                             <CardHeader><CardTitle className="flex items-center gap-2 text-blue-600 font-bold"><ExternalLink size={18} /> Integration Setup</CardTitle><CardDescription className="text-slate-500">Salin URL di bawah ini ke Shopee Seller Centre &gt; Webhook Settings.</CardDescription></CardHeader>
                             <CardContent><div className="space-y-2"><Label className="text-xs text-slate-500 uppercase font-bold">Webhook Push URL</Label><div className="flex gap-2"><Input readOnly value="https://middleware.elclawvision.workers.dev/" className="bg-slate-50 border-slate-200 text-xs font-mono text-blue-600" /><Button variant="outline" size="icon" className="hover:bg-blue-600 hover:text-white" onClick={() => {navigator.clipboard.writeText("https://middleware.elclawvision.workers.dev/"); toast({title: "Copied"});}}><Copy size={14} /></Button></div></div></CardContent>              </Card>
